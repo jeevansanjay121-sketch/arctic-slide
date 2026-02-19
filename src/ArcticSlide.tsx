@@ -17,22 +17,64 @@ const COLORS = {
 
 // --- Game Logic Helper ---
 const getLevelGrid = (level: number): Tile[][] => {
-  // Simple generator based on level index
+  // build a grid with a guaranteed path from start (0,0) to goal
   const size = Math.min(6 + Math.floor(level / 10), 15);
   const grid: Tile[][] = Array(size).fill(0).map(() => Array(size).fill('.'));
-  
-  // Randomly place obstacles and a fish
+
+  // deterministic pseudo-random helper based on level seed
   const seed = level * 12345;
-  const pseudoRandom = (s: number) => Math.sin(s) * 10000 % 1;
-  
-  for (let i = 0; i < size * 2; i++) {
-    const rx = Math.floor(Math.abs(pseudoRandom(seed + i)) * size);
-    const ry = Math.floor(Math.abs(pseudoRandom(seed + i * 2)) * size);
-    if (grid[ry][rx] === '.') grid[ry][rx] = 'X';
+  const pseudoRandom = (s: number) => (Math.sin(s) * 10000) % 1;
+  let rndIndex = 0;
+  const nextRandom = () => {
+    const v = pseudoRandom(seed + rndIndex);
+    rndIndex++;
+    return Math.abs(v);
+  };
+
+  // carve a backward path from goal to start using seeded randomness
+  const path: {x:number,y:number}[] = [];
+  let x = size - 1;
+  let y = size - 1;
+  path.push({x,y});
+
+  while (x !== 0 || y !== 0) {
+    const dirs: Array<[number,number]> = [];
+    if (x > 0) dirs.push([-1,0]);
+    if (y > 0) dirs.push([0,-1]);
+    const choice = Math.floor(nextRandom() * dirs.length);
+    const [dx,dy] = dirs[choice];
+    x += dx;
+    y += dy;
+    path.push({x,y});
   }
-  
+  // cells along path remain '.'
+
+  // place start and goal markers
   grid[0][0] = 'P';
   grid[size - 1][size - 1] = 'G';
+
+  // add a backstopper wall behind the goal relative to path direction
+  if (path.length >= 2) {
+    const last = path[0]; // goal
+    const prev = path[1];
+    const dx = last.x - prev.x;
+    const dy = last.y - prev.y;
+    const backX = last.x + dx;
+    const backY = last.y + dy;
+    if (backX >= 0 && backX < size && backY >= 0 && backY < size) {
+      if (grid[backY][backX] === '.') grid[backY][backX] = 'X';
+    }
+  }
+
+  // populate obstacles deterministically off the path
+  const isOnPath = (xx: number, yy: number) => path.some(p => p.x === xx && p.y === yy);
+  const obstacleCount = size * 2;
+  for (let i = 0; i < obstacleCount; i++) {
+    const rx = Math.floor(nextRandom() * size);
+    const ry = Math.floor(nextRandom() * size);
+    if (!isOnPath(rx, ry) && grid[ry][rx] === '.') grid[ry][rx] = 'X';
+  }
+
   return grid;
 };
 
@@ -136,28 +178,122 @@ export default function ArcticSlide() {
       // Draw Grid
       grid.forEach((row, y) => {
         row.forEach((tile, x) => {
+          // base color
           ctx.fillStyle = tile === 'X' ? COLORS.wall : tile === '~' ? COLORS.water : COLORS.ice;
           ctx.fillRect(x * size, y * size, size - 1, size - 1);
+
+          // ice sheen overlay
+          if (tile === '.') {
+            ctx.fillStyle = 'rgba(255,255,255,0.15)';
+            ctx.beginPath();
+            ctx.moveTo(x * size + size * 0.2, y * size + size * 0.1);
+            ctx.lineTo(x * size + size * 0.8, y * size + size * 0.1);
+            ctx.lineTo(x * size + size * 0.6, y * size + size * 0.4);
+            ctx.lineTo(x * size + size * 0.3, y * size + size * 0.3);
+            ctx.closePath();
+            ctx.fill();
+          }
+
+          // fish
           if (tile === 'G') {
+            // cute fish with tail and eye
+            const cx = x * size + size / 2;
+            const cy = y * size + size / 2;
             ctx.fillStyle = COLORS.fish;
             ctx.beginPath();
-            ctx.ellipse(x * size + size / 2, y * size + size / 2, size * 0.3, size * 0.2, 0, 0, Math.PI * 2);
+            ctx.ellipse(cx, cy, size * 0.3, size * 0.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = COLORS.ice;
+            ctx.beginPath();
+            ctx.moveTo(cx + size * 0.3, cy);
+            ctx.lineTo(cx + size * 0.45, cy - size * 0.15);
+            ctx.lineTo(cx + size * 0.45, cy + size * 0.15);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(cx - size * 0.1, cy - size * 0.05, size * 0.05, 0, Math.PI * 2);
             ctx.fill();
           }
         });
       });
 
-      // Draw Penguin
+      // Draw Penguin (cute with eyes, beak, flippers)
       const px = pos.x * size + size / 2;
       const py = pos.y * size + size / 2;
-      ctx.fillStyle = status === 'lost' ? '#60A5FA' : COLORS.penguinBody;
+      const bodyColor = status === 'lost' ? '#60A5FA' : COLORS.penguinBody;
+
+      // shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
+      ctx.beginPath();
+      ctx.ellipse(px, py + size * 0.25, size * 0.4, size * 0.15, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = bodyColor;
       ctx.beginPath();
       ctx.arc(px, py, size * 0.35, 0, Math.PI * 2);
       ctx.fill();
+
+      // belly
       ctx.fillStyle = '#FFF';
       ctx.beginPath();
       ctx.arc(px, py + size * 0.1, size * 0.2, 0, Math.PI * 2);
       ctx.fill();
+
+      // eyes
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(px - size * 0.12, py - size * 0.1, size * 0.05, 0, Math.PI * 2);
+      ctx.arc(px + size * 0.12, py - size * 0.1, size * 0.05, 0, Math.PI * 2);
+      ctx.fill();
+
+      // beak
+      ctx.fillStyle = COLORS.penguinOrange;
+      ctx.beginPath();
+      ctx.moveTo(px, py - size * 0.02);
+      ctx.lineTo(px - size * 0.08, py + size * 0.05);
+      ctx.lineTo(px + size * 0.08, py + size * 0.05);
+      ctx.closePath();
+      ctx.fill();
+
+      // flippers
+      ctx.strokeStyle = bodyColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(px - size * 0.3, py);
+      ctx.quadraticCurveTo(px - size * 0.4, py + size * 0.1, px - size * 0.2, py + size * 0.15);
+      ctx.moveTo(px + size * 0.3, py);
+      ctx.quadraticCurveTo(px + size * 0.4, py + size * 0.1, px + size * 0.2, py + size * 0.15);
+      ctx.stroke();
+
+      // sliding effects
+      if (state.current.isSliding) {
+        const dir = state.current.dir;
+        // snow blobs
+        for (let i = 0; i < 5; i++) {
+          const offset = i * size * 0.1;
+          ctx.fillStyle = 'rgba(255,255,255,0.7)';
+          ctx.beginPath();
+          ctx.arc(px - dir.x * offset, py - dir.y * offset, size * 0.05, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // sparkles on ice
+        for (let i = 0; i < 3; i++) {
+          const sx = px + (Math.random() - 0.5) * size * 0.6;
+          const sy = py + (Math.random() - 0.5) * size * 0.6;
+          const len = size * 0.1;
+          ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(sx - len / 2, sy);
+          ctx.lineTo(sx + len / 2, sy);
+          ctx.moveTo(sx, sy - len / 2);
+          ctx.lineTo(sx, sy + len / 2);
+          ctx.stroke();
+        }
+      }
 
       frame = requestAnimationFrame(draw);
     };
