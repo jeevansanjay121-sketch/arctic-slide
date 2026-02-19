@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import ArcticSlide from './ArcticSlide'
+import ArcticSlide from './ArcticSlide' // No .tsx at the end
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
