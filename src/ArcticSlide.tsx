@@ -175,32 +175,54 @@ export default function ArcticSlide() {
       const { grid, pos } = state.current;
       const size = canvas.width / grid.length;
 
+      // add a gentle wobble when standing still to make penguin more alive
+      const t = performance.now();
+      const bounce = Math.sin(t * 0.005) * size * 0.05;
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw Grid
+      // Draw Grid with simple 3D shading
       grid.forEach((row, y) => {
         row.forEach((tile, x) => {
-          // base color
-          ctx.fillStyle = tile === 'X' ? COLORS.wall : tile === '~' ? COLORS.water : COLORS.ice;
-          ctx.fillRect(x * size, y * size, size - 1, size - 1);
+          const px = x * size;
+          const py = y * size;
 
-          // ice sheen overlay
+          // base color gradient for depth effect
+          const grad = ctx.createLinearGradient(px, py, px + size, py + size);
+          if (tile === 'X') {
+            grad.addColorStop(0, '#6fb0ea');
+            grad.addColorStop(1, '#7dd3fc');
+          } else if (tile === '~') {
+            grad.addColorStop(0, '#074267');
+            grad.addColorStop(1, '#0c4a6e');
+          } else {
+            grad.addColorStop(0, COLORS.ice);
+            grad.addColorStop(1, COLORS.ice);
+          }
+          ctx.fillStyle = grad;
+          ctx.fillRect(px, py, size, size);
+
+          // thin dark border to accentuate blocks
+          ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px + 0.5, py + 0.5, size - 1, size - 1);
+
+          // ice sheen overlay for floor tiles
           if (tile === '.') {
             ctx.fillStyle = 'rgba(255,255,255,0.15)';
             ctx.beginPath();
-            ctx.moveTo(x * size + size * 0.2, y * size + size * 0.1);
-            ctx.lineTo(x * size + size * 0.8, y * size + size * 0.1);
-            ctx.lineTo(x * size + size * 0.6, y * size + size * 0.4);
-            ctx.lineTo(x * size + size * 0.3, y * size + size * 0.3);
+            ctx.moveTo(px + size * 0.2, py + size * 0.1);
+            ctx.lineTo(px + size * 0.8, py + size * 0.1);
+            ctx.lineTo(px + size * 0.6, py + size * 0.4);
+            ctx.lineTo(px + size * 0.3, py + size * 0.3);
             ctx.closePath();
             ctx.fill();
           }
 
-          // fish
+          // fish (goal) with a little heart eye for cuteness
           if (tile === 'G') {
-            // cute fish with tail and eye
-            const cx = x * size + size / 2;
-            const cy = y * size + size / 2;
+            const cx = px + size / 2;
+            const cy = py + size / 2;
             ctx.fillStyle = COLORS.fish;
             ctx.beginPath();
             ctx.ellipse(cx, cy, size * 0.3, size * 0.2, 0, 0, Math.PI * 2);
@@ -218,13 +240,29 @@ export default function ArcticSlide() {
             ctx.beginPath();
             ctx.arc(cx - size * 0.1, cy - size * 0.05, size * 0.05, 0, Math.PI * 2);
             ctx.fill();
+
+            // little heart next to eye
+            ctx.fillStyle = '#ff4081';
+            ctx.beginPath();
+            ctx.moveTo(cx - size * 0.08, cy - size * 0.12);
+            ctx.bezierCurveTo(
+              cx - size * 0.12, cy - size * 0.18,
+              cx - size * 0.02, cy - size * 0.18,
+              cx - size * 0.05, cy - size * 0.12
+            );
+            ctx.bezierCurveTo(
+              cx - size * 0.02, cy - size * 0.08,
+              cx - size * 0.12, cy - size * 0.06,
+              cx - size * 0.08, cy - size * 0.12
+            );
+            ctx.fill();
           }
         });
       });
 
-      // Draw Penguin (cute with eyes, beak, flippers)
+      // Draw Penguin (cute with gradient, blush and slight wobble)
       const px = pos.x * size + size / 2;
-      const py = pos.y * size + size / 2;
+      const py = pos.y * size + size / 2 + bounce; // apply bounce
       const bodyColor = status === 'lost' ? '#60A5FA' : COLORS.penguinBody;
 
       // shadow
@@ -233,7 +271,11 @@ export default function ArcticSlide() {
       ctx.ellipse(px, py + size * 0.25, size * 0.4, size * 0.15, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = bodyColor;
+      // body gradient for softness
+      const bodyGrad = ctx.createRadialGradient(px, py, size * 0.1, px, py, size * 0.35);
+      bodyGrad.addColorStop(0, '#444');
+      bodyGrad.addColorStop(1, bodyColor);
+      ctx.fillStyle = bodyGrad;
       ctx.beginPath();
       ctx.arc(px, py, size * 0.35, 0, Math.PI * 2);
       ctx.fill();
@@ -244,11 +286,23 @@ export default function ArcticSlide() {
       ctx.arc(px, py + size * 0.1, size * 0.2, 0, Math.PI * 2);
       ctx.fill();
 
-      // eyes
+      // eyes with cute sparkle
       ctx.fillStyle = '#000';
       ctx.beginPath();
       ctx.arc(px - size * 0.12, py - size * 0.1, size * 0.05, 0, Math.PI * 2);
       ctx.arc(px + size * 0.12, py - size * 0.1, size * 0.05, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(px - size * 0.125, py - size * 0.105, size * 0.02, 0, Math.PI * 2);
+      ctx.arc(px + size * 0.115, py - size * 0.105, size * 0.02, 0, Math.PI * 2);
+      ctx.fill();
+
+      // rosy cheeks for cuteness
+      ctx.fillStyle = 'rgba(255,192,203,0.6)';
+      ctx.beginPath();
+      ctx.arc(px - size * 0.15, py - size * 0.02, size * 0.07, 0, Math.PI * 2);
+      ctx.arc(px + size * 0.15, py - size * 0.02, size * 0.07, 0, Math.PI * 2);
       ctx.fill();
 
       // beak
@@ -333,27 +387,30 @@ export default function ArcticSlide() {
       </div>
 
       {/* Game Canvas */}
-      <div className="relative border-4 border-white/10 rounded-2xl overflow-hidden shadow-2xl">
-        <canvas 
-          ref={canvasRef} 
-          width={500} 
-          height={500} 
+      <div
+        className="relative border-4 border-white/10 rounded-2xl overflow-hidden shadow-2xl transform-gpu"
+        style={{ perspective: 800 }}
+      >
+        <canvas
+          ref={canvasRef}
+          width={500}
+          height={500}
           className="max-w-full aspect-square touch-none cursor-pointer"
+          style={{ transform: 'rotateX(10deg)' }}
           onClick={(e) => {
-  const rect = canvasRef.current?.getBoundingClientRect();
-  if (!rect) return;
-  
-  // Calculate where the click happened relative to the center
-  const x = e.clientX - rect.left - rect.width / 2;
-  const y = e.clientY - rect.top - rect.height / 2;
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (!rect) return;
 
-  // Move in the direction of the click
-  if (Math.abs(x) > Math.abs(y)) {
-    handleMove(x > 0 ? 1 : -1, 0);
-  } else {
-    handleMove(0, y > 0 ? 1 : -1);
-  }
-}}
+            // adjust for perspective transform when computing direction
+            const x = e.clientX - rect.left - rect.width / 2;
+            const y = e.clientY - rect.top - rect.height / 2;
+
+            if (Math.abs(x) > Math.abs(y)) {
+              handleMove(x > 0 ? 1 : -1, 0);
+            } else {
+              handleMove(0, y > 0 ? 1 : -1);
+            }
+          }}
         />
 
         {/* Overlays */}
