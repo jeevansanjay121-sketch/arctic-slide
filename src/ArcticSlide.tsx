@@ -16,12 +16,16 @@ const COLORS = {
 };
 
 // --- Game Logic Helper ---
+// generate a sliding-puzzle grid for a given level
 const getLevelGrid = (level: number): Tile[][] => {
-  // build a grid with a guaranteed path from start (0,0) to goal
+  // grid dimensions grow slowly with level but cap for performance
   const size = Math.min(6 + Math.floor(level / 10), 15);
-  const grid: Tile[][] = Array(size).fill(0).map(() => Array(size).fill('.'));
+  // start with everything walled – we'll carve out a single guaranteed path
+  const grid: Tile[][] = Array(size)
+    .fill(null)
+    .map(() => Array(size).fill('X'));
 
-  // deterministic pseudo-random helper based on level seed
+  // seeded pseudo-random helper so levels are deterministic
   const seed = level * 12345;
   const pseudoRandom = (s: number) => (Math.sin(s) * 10000) % 1;
   let rndIndex = 0;
@@ -31,48 +35,46 @@ const getLevelGrid = (level: number): Tile[][] => {
     return Math.abs(v);
   };
 
-  // carve a backward path from goal to start using seeded randomness
-  const path: {x:number,y:number}[] = [];
-  let x = size - 1;
-  let y = size - 1;
-  path.push({x,y});
+  // build a simple monotonic path from top‑left to bottom‑right
+  const path: { x: number; y: number }[] = [];
+  let x = 0;
+  let y = 0;
+  path.push({ x, y });
 
-  while (x !== 0 || y !== 0) {
-    const dirs: Array<[number,number]> = [];
-    if (x > 0) dirs.push([-1,0]);
-    if (y > 0) dirs.push([0,-1]);
-    const choice = Math.floor(nextRandom() * dirs.length);
-    const [dx,dy] = dirs[choice];
+  while (x !== size - 1 || y !== size - 1) {
+    const dirs: Array<[number, number]> = [];
+    if (x < size - 1) dirs.push([1, 0]);
+    if (y < size - 1) dirs.push([0, 1]);
+    const [dx, dy] = dirs[Math.floor(nextRandom() * dirs.length)];
     x += dx;
     y += dy;
-    path.push({x,y});
+    path.push({ x, y });
   }
-  // cells along path remain '.'
 
-  // place start and goal markers
+  // carve the corridor (all other cells remain walls)
+  path.forEach(p => {
+    grid[p.y][p.x] = '.';
+  });
+
+  // mark start and goal
   grid[0][0] = 'P';
   grid[size - 1][size - 1] = 'G';
 
-  // add a backstopper wall behind the goal relative to path direction
+  // put a small backstopper beyond the goal so the penguin can't slide past it
   if (path.length >= 2) {
-    const last = path[0]; // goal
-    const prev = path[1];
+    const last = path[path.length - 1]; // goal
+    const prev = path[path.length - 2];
     const dx = last.x - prev.x;
     const dy = last.y - prev.y;
     const backX = last.x + dx;
     const backY = last.y + dy;
-    if (backX >= 0 && backX < size && backY >= 0 && backY < size) {
-      if (grid[backY][backX] === '.') grid[backY][backX] = 'X';
+    if (
+      backX >= 0 && backX < size &&
+      backY >= 0 && backY < size &&
+      grid[backY][backX] === '.'
+    ) {
+      grid[backY][backX] = 'X';
     }
-  }
-
-  // populate obstacles deterministically off the path
-  const isOnPath = (xx: number, yy: number) => path.some(p => p.x === xx && p.y === yy);
-  const obstacleCount = size * 2;
-  for (let i = 0; i < obstacleCount; i++) {
-    const rx = Math.floor(nextRandom() * size);
-    const ry = Math.floor(nextRandom() * size);
-    if (!isOnPath(rx, ry) && grid[ry][rx] === '.') grid[ry][rx] = 'X';
   }
 
   return grid;
