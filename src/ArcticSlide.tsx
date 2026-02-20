@@ -97,16 +97,41 @@ export default function ArcticSlide() {
     totalFish: 1,
   });
 
-  // Initialization
+  // level names for flavour
+  const LEVEL_NAMES = [
+    'First Slide',
+    'Penguin Path',
+    'Ice Drift',
+    'Frosty Turn',
+    'Snowy Stretch',
+    'Glacial Rush',
+    'Aurora Run',
+    'Blizzard Bend',
+    'Crystal Corridor',
+    'Midnight Melt',
+  ];
+
+  // Initialization/reset helper is now above (initializeLevel)
   useEffect(() => {
-    const grid = getLevelGrid(level);
+    initializeLevel(level);
+  }, [level]);
+
+  // when retrying we just re-run initializer for current level
+  const handleRetry = () => initializeLevel(level);
+
+
+  // helper to (re)initialize game state for a given level
+  const initializeLevel = (lvl: number) => {
+    const grid = getLevelGrid(lvl);
     let startPos = { x: 0, y: 0 };
     let fishCount = 0;
-    
-    grid.forEach((row, y) => row.forEach((tile, x) => {
-      if (tile === 'P') startPos = { x, y };
-      if (tile === 'G') fishCount++;
-    }));
+
+    grid.forEach((row, y) =>
+      row.forEach((tile, x) => {
+        if (tile === 'P') startPos = { x, y };
+        if (tile === 'G') fishCount++;
+      })
+    );
 
     state.current = {
       pos: startPos,
@@ -118,7 +143,7 @@ export default function ArcticSlide() {
     };
     setMoves(0);
     setStatus('playing');
-  }, [level]);
+  };
 
   // Movement Logic
   const handleMove = useCallback((dx: number, dy: number) => {
@@ -133,11 +158,11 @@ export default function ArcticSlide() {
       const nextY = state.current.pos.y + dy;
       const grid = state.current.grid;
 
-      // Check Bounds
+      // if our next step would leave the grid treat it as hitting a wall
       if (nextY < 0 || nextY >= grid.length || nextX < 0 || nextX >= grid[0].length) {
-        setStatus('lost');
-        clearInterval(slideInterval);
+        // simply stop sliding instead of losing
         state.current.isSliding = false;
+        clearInterval(slideInterval);
         return;
       }
 
@@ -382,7 +407,10 @@ export default function ArcticSlide() {
           <button onClick={() => setLevel(l => Math.max(0, l - 1))} className="p-2 bg-white/10 rounded-lg hover:bg-white/20"><ChevronLeft size={20}/></button>
           <span className="bg-blue-600 px-3 py-1 rounded-lg font-mono">Lvl {level + 1}</span>
           <button onClick={() => setLevel(l => l + 1)} className="p-2 bg-white/10 rounded-lg hover:bg-white/20"><ChevronRight size={20}/></button>
-          <button onClick={() => setLevel(level)} className="p-2 bg-red-500/20 text-red-400 rounded-lg"><RefreshCw size={20}/></button>
+          <button onClick={handleRetry} className="p-2 bg-red-500/20 text-red-400 rounded-lg"><RefreshCw size={20}/></button>
+        </div>
+        <div className="text-xs mt-1 opacity-60">
+          {LEVEL_NAMES[level % LEVEL_NAMES.length] || `Lvl ${level + 1}`}
         </div>
       </div>
 
